@@ -3,39 +3,47 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, Loader2 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import CreateJobDialog from "@/components/CreateJobDialog";
-
-const mockJobs = [
-  {
-    id: 1,
-    title: "Senior Software Engineer",
-    totalCandidates: 24,
-    shortlistedCandidates: 8,
-  },
-  {
-    id: 2,
-    title: "Product Manager",
-    totalCandidates: 18,
-    shortlistedCandidates: 5,
-  },
-  {
-    id: 3,
-    title: "UX Designer",
-    totalCandidates: 32,
-    shortlistedCandidates: 12,
-  },
-  {
-    id: 4,
-    title: "Data Scientist",
-    totalCandidates: 15,
-    shortlistedCandidates: 6,
-  },
-];
+import { useJobs } from "@/hooks/useJobs";
+import { useAuth } from "@/hooks/useAuth";
 
 const Dashboard = () => {
   const [showCreateJob, setShowCreateJob] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const { data: jobs = [], isLoading, error } = useJobs();
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-hr-gray">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-hr-purple" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-hr-gray">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-hr-navy mb-4">Please sign in to continue</h2>
+            <p className="text-gray-600">You need to be authenticated to access the dashboard.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    console.error('Error fetching jobs:', error);
+  }
 
   return (
     <div className="min-h-screen bg-hr-gray">
@@ -56,8 +64,14 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600">Error loading jobs. Please try again.</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockJobs.map((job) => (
+          {jobs.map((job) => (
             <Card key={job.id} className="hover:shadow-lg transition-shadow duration-200 border-0 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg text-hr-navy">{job.title}</CardTitle>
@@ -68,12 +82,12 @@ const Dashboard = () => {
                     <Users className="h-4 w-4 text-gray-500" />
                     <span className="text-gray-600">Total Candidates</span>
                   </div>
-                  <span className="font-semibold text-hr-navy">{job.totalCandidates}</span>
+                  <span className="font-semibold text-hr-navy">{job.total_candidates}</span>
                 </div>
                 
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Shortlisted</span>
-                  <span className="font-semibold text-green-600">{job.shortlistedCandidates}</span>
+                  <span className="font-semibold text-green-600">{job.shortlisted_candidates}</span>
                 </div>
                 
                 <Link to={`/job/${job.id}`}>
@@ -86,7 +100,7 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {mockJobs.length === 0 && (
+        {jobs.length === 0 && !isLoading && (
           <div className="text-center py-12">
             <h3 className="text-xl font-semibold text-gray-600 mb-2">No active jobs yet</h3>
             <p className="text-gray-500 mb-6">Create your first job posting to get started</p>

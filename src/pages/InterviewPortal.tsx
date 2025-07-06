@@ -1,69 +1,122 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Play, Square, RotateCcw } from "lucide-react";
-
-const mockInterviewData = {
-  jobTitle: "Senior Software Engineer",
-  companyName: "TechCorp Inc.",
-  questions: [
-    "Tell me about a challenging technical problem you solved recently.",
-    "How do you approach code reviews with your team?",
-    "Describe your experience with agile development methodologies.",
-    "What strategies do you use for debugging complex issues?",
-    "How do you stay updated with new technologies and best practices?"
-  ]
-};
+import { Play, Square, RotateCcw, Loader2 } from "lucide-react";
+import { useInterviewByToken, useStartInterview, useSubmitInterviewResponse, useCompleteInterview } from "@/hooks/useInterviews";
+import { useToast } from "@/hooks/use-toast";
 
 const InterviewPortal = () => {
   const { token } = useParams();
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState<'welcome' | 'question' | 'review' | 'thankyou'>('welcome');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [hasRecorded, setHasRecorded] = useState(false);
+  const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
 
-  const progress = ((currentQuestionIndex + 1) / mockInterviewData.questions.length) * 100;
+  // Fetch interview data
+  const { data: interviewData, isLoading, error } = useInterviewByToken(token!);
+  
+  // Mutations
+  const startInterviewMutation = useStartInterview();
+  const submitResponseMutation = useSubmitInterviewResponse();
+  const completeInterviewMutation = useCompleteInterview();
 
-  const startInterview = () => {
-    setCurrentStep('question');
+  const progress = interviewData?.questions ? ((currentQuestionIndex + 1) / interviewData.questions.length) * 100 : 0;
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimer) {
+        clearInterval(recordingTimer);
+      }
+    };
+  }, [recordingTimer]);
+
+  const startInterview = async () => {
+    if (!interviewData) return;
+    
+    try {
+      await startInterviewMutation.mutateAsync(interviewData.id);
+      setCurrentStep('question');
+    } catch (error) {
+      console.error('Error starting interview:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start interview. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const toggleRecording = () => {
     if (isRecording) {
+      // Stop recording
       setIsRecording(false);
       setHasRecorded(true);
+      if (recordingTimer) {
+        clearInterval(recordingTimer);
+        setRecordingTimer(null);
+      }
       setCurrentStep('review');
     } else {
+      // Start recording
       setIsRecording(true);
       setRecordingTime(0);
-      // Simulate recording timer
+      
       const timer = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
+      setRecordingTimer(timer);
       
-      // Auto-stop after 2 minutes (for demo)
+      // Auto-stop after 3 minutes
       setTimeout(() => {
-        clearInterval(timer);
+        if (timer) {
+          clearInterval(timer);
+        }
         setIsRecording(false);
         setHasRecorded(true);
         setCurrentStep('review');
-      }, 120000);
+        setRecordingTimer(null);
+      }, 180000);
     }
   };
 
-  const submitAndContinue = () => {
-    if (currentQuestionIndex < mockInterviewData.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setCurrentStep('question');
-      setIsRecording(false);
-      setHasRecorded(false);
-      setRecordingTime(0);
-    } else {
-      setCurrentStep('thankyou');
+  const submitAndContinue = async () => {
+    if (!interviewData) return;
+
+    try {
+      // Submit the response
+      await submitResponseMutation.mutateAsync({
+        interviewId: interviewData.id,
+        questionIndex: currentQuestionIndex,
+        questionText: interviewData.questions[currentQuestionIndex],
+        responseText: `Recorded response (${formatTime(recordingTime)})`,
+        durationSeconds: recordingTime
+      });
+
+      if (currentQuestionIndex < interviewData.questions.length - 1) {
+        // Move to next question
+        setCurrentQuestionIndex(prev => prev + 1);
+        setCurrentStep('question');
+        setIsRecording(false);
+        setHasRecorded(false);
+        setRecordingTime(0);
+      } else {
+        // Complete the interview
+        await completeInterviewMutation.mutateAsync(interviewData.id);
+        setCurrentStep('thankyou');
+      }
+    } catch (error) {
+      console.error('Error submitting response:', error);
+      toast({
+        title: "Error",
+        description: "Failed to submit response. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -80,6 +133,32 @@ const InterviewPortal = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-hr-gray to-white flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl border-0 shadow-lg">
+          <CardContent className="text-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-hr-purple mx-auto mb-4" />
+            <p className="text-gray-600">Loading interview...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error || !interviewData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-hr-gray to-white flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl border-0 shadow-lg">
+          <CardContent className="text-center py-8">
+            <h2 className="text-2xl font-bold text-hr-navy mb-4">Interview Not Found</h2>
+            <p className="text-gray-600">The interview link is invalid or has expired.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (currentStep === 'welcome') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-hr-gray to-white flex items-center justify-center p-4">
@@ -90,15 +169,15 @@ const InterviewPortal = () => {
           <CardContent className="space-y-6 text-center">
             <div>
               <h2 className="text-xl font-semibold text-hr-navy mb-2">
-                {mockInterviewData.jobTitle}
+                {interviewData.jobs?.title}
               </h2>
-              <p className="text-gray-600">at {mockInterviewData.companyName}</p>
+              <p className="text-gray-600">at {interviewData.companies?.name}</p>
             </div>
             
             <div className="bg-hr-gray p-6 rounded-lg text-left">
               <h3 className="font-semibold text-hr-navy mb-3">Interview Process:</h3>
               <ul className="space-y-2 text-gray-700">
-                <li>• You will be asked {mockInterviewData.questions.length} behavioral questions</li>
+                <li>• You will be asked {interviewData.questions.length} questions</li>
                 <li>• Each question should be answered in 2-3 minutes</li>
                 <li>• You can review and re-record your answers</li>
                 <li>• Speak clearly and take your time</li>
@@ -109,8 +188,16 @@ const InterviewPortal = () => {
               onClick={startInterview}
               size="lg"
               className="bg-hr-purple hover:bg-hr-purple/90 px-8"
+              disabled={startInterviewMutation.isPending}
             >
-              Begin Interview
+              {startInterviewMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                'Begin Interview'
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -125,7 +212,7 @@ const InterviewPortal = () => {
           <CardHeader>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-600">
-                Question {currentQuestionIndex + 1} of {mockInterviewData.questions.length}
+                Question {currentQuestionIndex + 1} of {interviewData.questions.length}
               </span>
               <span className="text-sm text-gray-600">{Math.round(progress)}% Complete</span>
             </div>
@@ -134,7 +221,7 @@ const InterviewPortal = () => {
           <CardContent className="space-y-8">
             <div className="text-center">
               <h2 className="text-xl font-semibold text-hr-navy mb-6 leading-relaxed">
-                {mockInterviewData.questions[currentQuestionIndex]}
+                {interviewData.questions[currentQuestionIndex]}
               </h2>
             </div>
             
@@ -182,7 +269,7 @@ const InterviewPortal = () => {
           <CardContent className="space-y-6">
             <div className="bg-hr-gray p-4 rounded-lg">
               <p className="text-gray-700 font-medium mb-2">Question:</p>
-              <p className="text-hr-navy">{mockInterviewData.questions[currentQuestionIndex]}</p>
+              <p className="text-hr-navy">{interviewData.questions[currentQuestionIndex]}</p>
             </div>
             
             <div className="text-center space-y-4">
@@ -209,8 +296,16 @@ const InterviewPortal = () => {
                 <Button 
                   onClick={submitAndContinue}
                   className="bg-hr-purple hover:bg-hr-purple/90"
+                  disabled={submitResponseMutation.isPending || completeInterviewMutation.isPending}
                 >
-                  Submit and Continue
+                  {submitResponseMutation.isPending || completeInterviewMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    currentQuestionIndex < interviewData.questions.length - 1 ? 'Submit and Continue' : 'Complete Interview'
+                  )}
                 </Button>
               </div>
             </div>
@@ -234,7 +329,7 @@ const InterviewPortal = () => {
             <div>
               <h1 className="text-2xl font-bold text-hr-navy mb-2">Thank You!</h1>
               <p className="text-gray-600 mb-6">
-                You have successfully completed the interview for the <strong>{mockInterviewData.jobTitle}</strong> position at <strong>{mockInterviewData.companyName}</strong>.
+                You have successfully completed the interview for the <strong>{interviewData.jobs?.title}</strong> position at <strong>{interviewData.companies?.name}</strong>.
               </p>
             </div>
             
