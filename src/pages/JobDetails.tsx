@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,8 @@ import { Loader2, MoreHorizontal } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useToast } from "@/hooks/use-toast";
 
-const mockJobData = {
-  1: {
+const mockJobData: Record<string, { title: string; description: string }> = {
+  "1": {
     title: "Senior Software Engineer",
     description: "We are looking for an experienced Senior Software Engineer to join our dynamic team. The ideal candidate will have 5+ years of experience in full-stack development, proficiency in React, Node.js, and Python, and a strong understanding of cloud technologies. You will be responsible for designing and implementing scalable solutions, mentoring junior developers, and collaborating with cross-functional teams to deliver high-quality software products.",
   }
@@ -60,7 +59,7 @@ const JobDetails = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
 
-  const jobData = mockJobData[id as keyof typeof mockJobData];
+  const jobData = id ? mockJobData[id] : null;
 
   const handleAnalyzeCVs = () => {
     setAnalyzing(true);
