@@ -8,8 +8,9 @@ import { AuthProvider } from "./hooks/useAuth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import JobDetails from "./pages/JobDetails";
-import Settings from "./pages/Settings";
+import InterviewsPage from "./pages/InterviewsPage";
 import InterviewPortal from "./pages/InterviewPortal";
+import CandidateInterview from "./pages/CandidateInterview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,8 +26,9 @@ const App = () => (
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/job/:id" element={<JobDetails />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/interviews" element={<InterviewsPage />} />
             <Route path="/interview/:token" element={<InterviewPortal />} />
+            <Route path="/candidate-interview/:token" element={<CandidateInterview />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
