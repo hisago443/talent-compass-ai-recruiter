@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, MoreHorizontal } from "lucide-react";
+import { Loader2, MoreHorizontal, Copy, CheckCircle } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useToast } from "@/hooks/use-toast";
 import { useCandidates, useUpdateCandidateStatus, useInviteToInterview, CandidateStatus } from "@/hooks/useCandidates";
@@ -19,6 +20,7 @@ const JobDetails = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Fetch job data
   const { data: jobData, isLoading: jobLoading } = useQuery({
@@ -56,21 +58,43 @@ const JobDetails = () => {
     }, 3000);
   };
 
+  const copyInterviewLink = async (token: string) => {
+    const link = `${window.location.origin}/candidate-interview/${token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+      toast({
+        title: "Link Copied",
+        description: "Interview link has been copied to clipboard.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy link to clipboard.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCandidateAction = async (candidateId: string, action: string) => {
     const candidate = candidates.find(c => c.id === candidateId);
     
     try {
       if (action === 'Invite to Interview') {
-        // Default interview questions - in production, these would come from interview kits
+        // Default interview questions - mix of behavioral and technical
         const defaultQuestions = [
           "Tell me about yourself and your background.",
-          "Why are you interested in this position?",
-          "Describe a challenging project you've worked on.",
-          "How do you handle working under pressure?",
+          "Why are you interested in this position and our company?",
+          "Describe a challenging project you've worked on and how you overcame the difficulties.",
+          "How do you handle working under pressure and tight deadlines?",
+          "What technical skills do you bring to this role?",
+          "Describe a time when you had to learn a new technology quickly.",
+          "How do you stay updated with the latest industry trends?",
           "Where do you see yourself in 5 years?"
         ];
 
-        await inviteToInterviewMutation.mutateAsync({
+        const result = await inviteToInterviewMutation.mutateAsync({
           candidateId,
           jobId: id!,
           questions: defaultQuestions
@@ -78,8 +102,11 @@ const JobDetails = () => {
 
         toast({
           title: "Interview Scheduled",
-          description: `${candidate?.name} has been invited to interview. Interview link will be sent via email.`,
+          description: `${candidate?.name} has been invited to interview. You can now copy the interview link.`,
         });
+
+        // Refetch candidates to get updated data with interview token
+        refetch();
       } else {
         await updateStatusMutation.mutateAsync({ 
           candidateId, 
@@ -204,6 +231,7 @@ const JobDetails = () => {
                       <TableHead>CV Match Score</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Applied Date</TableHead>
+                      <TableHead>Interview Link</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -224,6 +252,30 @@ const JobDetails = () => {
                         </TableCell>
                         <TableCell className="text-gray-600">
                           {candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {candidate.interview_token ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => copyInterviewLink(candidate.interview_token)}
+                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                            >
+                              {copiedToken === candidate.interview_token ? (
+                                <>
+                                  <CheckCircle className="mr-2 h-3 w-3" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="mr-2 h-3 w-3" />
+                                  Copy Link
+                                </>
+                              )}
+                            </Button>
+                          ) : (
+                            <span className="text-gray-400 text-sm">No interview scheduled</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -251,6 +303,12 @@ const JobDetails = () => {
                                 className="cursor-pointer text-red-600"
                               >
                                 Reject
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => showSummary(candidate)}
+                                className="cursor-pointer"
+                              >
+                                View Details
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -286,6 +344,26 @@ const JobDetails = () => {
                     {typeof selectedCandidate.cv_analysis === 'string' 
                       ? selectedCandidate.cv_analysis 
                       : JSON.stringify(selectedCandidate.cv_analysis, null, 2)}
+                  </div>
+                </div>
+              )}
+              {selectedCandidate.interview_token && (
+                <div>
+                  <h5 className="font-medium text-hr-navy mb-2">Interview Link:</h5>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="text" 
+                      value={`${window.location.origin}/candidate-interview/${selectedCandidate.interview_token}`}
+                      readOnly 
+                      className="flex-1 p-2 border rounded text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => copyInterviewLink(selectedCandidate.interview_token)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               )}

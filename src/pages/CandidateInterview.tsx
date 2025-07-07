@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,8 @@ const CandidateInterview = () => {
   const [currentResponse, setCurrentResponse] = useState('');
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Fetch interview data
   const { data: interviewData, isLoading, error } = useInterviewByToken(token!);
@@ -40,6 +41,9 @@ const CandidateInterview = () => {
       }
       if (speechSynthesisRef.current) {
         speechSynthesis.cancel();
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
     };
   }, [recordingTimer]);
@@ -69,6 +73,7 @@ const CandidateInterview = () => {
 
       recognition.onstart = () => {
         setIsListening(true);
+        console.log('Speech recognition started');
       };
 
       recognition.onresult = (event: any) => {
@@ -91,8 +96,10 @@ const CandidateInterview = () => {
 
       recognition.onend = () => {
         setIsListening(false);
+        console.log('Speech recognition ended');
       };
 
+      recognitionRef.current = recognition;
       return recognition;
     }
     return null;
@@ -105,9 +112,11 @@ const CandidateInterview = () => {
       await startInterviewMutation.mutateAsync(interviewData.id);
       setCurrentStep('question');
       
-      // Speak the first question
+      // Speak the first question after a short delay
       setTimeout(() => {
-        speakQuestion(interviewData.questions[0]);
+        if (interviewData.questions && interviewData.questions.length > 0) {
+          speakQuestion(interviewData.questions[0]);
+        }
       }, 1000);
     } catch (error) {
       console.error('Error starting interview:', error);
@@ -122,8 +131,11 @@ const CandidateInterview = () => {
   const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording
-      if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         mediaRecorderRef.current.stop();
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
       }
       setIsRecording(false);
       setHasRecorded(true);
@@ -138,10 +150,9 @@ const CandidateInterview = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
 
         mediaRecorder.ondataavailable = (event) => {
-          audioChunksRef.current.push(event.data);
+          console.log('Audio data available:', event.data.size);
         };
 
         mediaRecorder.start();
@@ -164,6 +175,9 @@ const CandidateInterview = () => {
         setTimeout(() => {
           if (mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+            }
             setIsRecording(false);
             setHasRecorded(true);
             clearInterval(timer);
@@ -198,7 +212,8 @@ const CandidateInterview = () => {
 
       if (currentQuestionIndex < interviewData.questions.length - 1) {
         // Move to next question
-        setCurrentQuestionIndex(prev => prev + 1);
+        const nextIndex = currentQuestionIndex + 1;
+        setCurrentQuestionIndex(nextIndex);
         setCurrentStep('question');
         setIsRecording(false);
         setHasRecorded(false);
@@ -207,7 +222,9 @@ const CandidateInterview = () => {
         
         // Speak the next question
         setTimeout(() => {
-          speakQuestion(interviewData.questions[currentQuestionIndex + 1]);
+          if (interviewData.questions && interviewData.questions[nextIndex]) {
+            speakQuestion(interviewData.questions[nextIndex]);
+          }
         }, 1000);
       } else {
         // Complete the interview
@@ -284,6 +301,7 @@ const CandidateInterview = () => {
               <ul className="space-y-2 text-gray-700">
                 <li>• You will be asked {interviewData.questions.length} questions</li>
                 <li>• Each question should be answered in 2-3 minutes</li>
+                <li>• The AI will speak the questions to you</li>
                 <li>• You can review and re-record your answers</li>
                 <li>• Speak clearly and take your time</li>
               </ul>
@@ -338,6 +356,12 @@ const CandidateInterview = () => {
                     <span className="text-red-500 font-medium">Recording</span>
                     <span className="text-gray-600">{formatTime(recordingTime)}</span>
                   </div>
+                  {isListening && (
+                    <div className="flex items-center justify-center space-x-2">
+                      <Volume2 className="h-4 w-4 text-blue-500 animate-pulse" />
+                      <span className="text-blue-500">Listening...</span>
+                    </div>
+                  )}
                   <Button 
                     onClick={toggleRecording}
                     size="lg"
@@ -355,19 +379,11 @@ const CandidateInterview = () => {
                     className="bg-hr-purple hover:bg-hr-purple/90 px-8"
                   >
                     <Mic className="mr-2 h-5 w-5" />
-                    Record Answer
+                    Start Recording
                   </Button>
-                  {isListening ? (
-                    <div className="flex items-center justify-center space-x-2">
-                      <Volume2 className="h-4 w-4 text-blue-500 animate-pulse" />
-                      <span className="text-blue-500">Listening...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center space-x-2">
-                      <VolumeX className="h-4 w-4 text-gray-500" />
-                      <span className="text-gray-500">Not Listening</span>
-                    </div>
-                  )}
+                  <p className="text-sm text-gray-500">
+                    Click the microphone to start recording your answer
+                  </p>
                 </div>
               )}
             </div>
@@ -394,18 +410,12 @@ const CandidateInterview = () => {
               <div className="bg-white p-6 rounded-lg border-2 border-dashed border-gray-300">
                 <p className="text-gray-600 mb-2">Your recorded answer</p>
                 <p className="text-sm text-gray-500">Duration: {formatTime(recordingTime)}</p>
-                <div className="mt-4">
-                  <div className="bg-gray-200 rounded-full h-2 mb-2">
-                    <div className="bg-hr-purple h-2 rounded-full w-full"></div>
+                {currentResponse && (
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <p className="text-gray-700 font-medium mb-2">Transcribed Response:</p>
+                    <p className="text-sm text-gray-600 italic">{currentResponse}</p>
                   </div>
-                  <p className="text-xs text-gray-500">Audio playback would be available here</p>
-                  {currentResponse && (
-                    <div className="mt-4">
-                      <p className="text-gray-700">Transcribed Response:</p>
-                      <p className="text-sm italic text-gray-600">{currentResponse}</p>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
               
               <div className="flex justify-center space-x-4">
@@ -415,7 +425,7 @@ const CandidateInterview = () => {
                   className="border-hr-purple text-hr-purple hover:bg-hr-purple hover:text-white"
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  Rerecord Answer
+                  Re-record Answer
                 </Button>
                 <Button 
                   onClick={submitAndContinue}
