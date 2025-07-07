@@ -1,6 +1,6 @@
 
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Users, Loader2 } from "lucide-react";
@@ -11,30 +11,37 @@ import { useAuth } from "@/hooks/useAuth";
 
 const Dashboard = () => {
   const [showCreateJob, setShowCreateJob] = useState(false);
-  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const { user, profile, loading: authLoading } = useAuth();
   const { data: jobs = [], isLoading, error } = useJobs();
 
-  if (authLoading || isLoading) {
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/');
+    }
+  }, [user, authLoading, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-hr-gray">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-hr-purple" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect in useEffect
+  }
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-hr-gray">
         <Navigation />
         <main className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-hr-purple" />
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-hr-gray">
-        <Navigation />
-        <main className="container mx-auto px-4 py-8">
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-hr-navy mb-4">Please sign in to continue</h2>
-            <p className="text-gray-600">You need to be authenticated to access the dashboard.</p>
           </div>
         </main>
       </div>
@@ -53,7 +60,9 @@ const Dashboard = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-hr-navy mb-2">Active Jobs</h1>
-            <p className="text-gray-600">Manage your recruitment pipeline</p>
+            <p className="text-gray-600">
+              {profile?.companies?.name ? `Welcome to ${profile.companies.name}` : 'Manage your recruitment pipeline'}
+            </p>
           </div>
           <Button 
             onClick={() => setShowCreateJob(true)}
