@@ -47,11 +47,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        // If it's a new user signup, create profile if it doesn't exist
-        if (event === 'SIGNED_UP') {
-          await handleNewUserProfile(session.user);
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          await fetchProfile(session.user.id);
         }
-        await fetchProfile(session.user.id);
       } else {
         setProfile(null);
         setLoading(false);
@@ -61,52 +59,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleNewUserProfile = async (user: User) => {
-    try {
-      // Check if profile already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-
-      if (!existingProfile) {
-        // Create profile if it doesn't exist
-        const userData = user.user_metadata || {};
-        const { error } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-            first_name: userData.first_name || '',
-            last_name: userData.last_name || '',
-          });
-
-        if (error) {
-          console.error('Error creating profile:', error);
-        }
-      }
-    } catch (error) {
-      console.error('Error handling new user profile:', error);
-    }
-  };
-
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*, companies(name)')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching profile:', error);
-        // If profile doesn't exist, the user might be new
-        if (error.code === 'PGRST116') {
-          console.log('Profile not found, user might be new');
-        }
-      } else {
+      } else if (data) {
         setProfile(data);
+      } else {
+        console.log('Profile not found for user:', userId);
+        setProfile(null);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);

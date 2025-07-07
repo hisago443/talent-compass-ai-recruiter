@@ -91,46 +91,65 @@ const Login = () => {
         return;
       }
 
-      if (authData.user) {
-        // Create company record
-        const { data: companyData, error: companyError } = await supabase
-          .from('companies')
-          .insert({
-            name: companyName,
-            email: email,
-          })
-          .select()
-          .single();
-
-        if (companyError) {
-          console.error('Company creation error:', companyError);
-          toast({
-            title: "Setup Incomplete",
-            description: "Account created but company setup failed. Please contact support.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Update user profile with company_id
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            company_id: companyData.id,
-            first_name: userName.split(' ')[0] || userName,
-            last_name: userName.split(' ').slice(1).join(' ') || '',
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) {
-          console.error('Profile update error:', profileError);
-        }
-
+      if (authData.user && !authData.session) {
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account, then sign in.",
         });
         setActiveTab("login");
+      } else if (authData.user && authData.session) {
+        // User is automatically signed in, handle company creation
+        try {
+          // Create company record
+          const { data: companyData, error: companyError } = await supabase
+            .from('companies')
+            .insert({
+              name: companyName,
+              email: email,
+            })
+            .select()
+            .single();
+
+          if (companyError) {
+            console.error('Company creation error:', companyError);
+            toast({
+              title: "Setup Incomplete", 
+              description: "Account created but company setup failed. Please contact support.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          // Wait a bit for profile creation trigger to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Update user profile with company_id
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              company_id: companyData.id,
+              first_name: userName.split(' ')[0] || userName,
+              last_name: userName.split(' ').slice(1).join(' ') || '',
+            })
+            .eq('id', authData.user.id);
+
+          if (profileError) {
+            console.error('Profile update error:', profileError);
+          }
+
+          toast({
+            title: "Account created successfully!",
+            description: "Welcome to your AI HR Platform.",
+          });
+          navigate('/dashboard');
+        } catch (error) {
+          console.error('Error during company/profile setup:', error);
+          toast({
+            title: "Setup Error",
+            description: "Account created but setup incomplete. Please try logging in.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error('Signup error:', error);
