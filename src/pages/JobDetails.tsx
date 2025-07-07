@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, MoreHorizontal } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useCandidates, useUpdateCandidateStatus, useInviteToInterview } from "@/hooks/useCandidates";
+import { useCandidates, useUpdateCandidateStatus, useInviteToInterview, CandidateStatus } from "@/hooks/useCandidates";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -84,7 +83,7 @@ const JobDetails = () => {
       } else {
         await updateStatusMutation.mutateAsync({ 
           candidateId, 
-          status: action 
+          status: action as CandidateStatus
         });
 
         toast({

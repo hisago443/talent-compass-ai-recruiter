@@ -18,6 +18,17 @@ export interface Candidate {
   updated_at: string;
 }
 
+// Define the candidate status type to match the database enum
+export type CandidateStatus = 
+  | 'Applied'
+  | 'Screening'
+  | 'Shortlisted'
+  | 'Interview Scheduled'
+  | 'Interview Completed'
+  | 'Interview Reviewed'
+  | 'Hired'
+  | 'Rejected';
+
 export const useCandidates = (jobId: string) => {
   return useQuery({
     queryKey: ['candidates', jobId],
@@ -39,7 +50,7 @@ export const useUpdateCandidateStatus = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ candidateId, status }: { candidateId: string; status: string }) => {
+    mutationFn: async ({ candidateId, status }: { candidateId: string; status: CandidateStatus }) => {
       const { data, error } = await supabase
         .from('candidates')
         .update({ status, updated_at: new Date().toISOString() })
@@ -98,7 +109,7 @@ export const useInviteToInterview = () => {
       // Update candidate status
       const { error: statusError } = await supabase
         .from('candidates')
-        .update({ status: 'Interview Scheduled' })
+        .update({ status: 'Interview Scheduled' as CandidateStatus })
         .eq('id', candidateId);
 
       if (statusError) throw statusError;
